@@ -6,20 +6,41 @@ use PDO;
 use PDOException;
 use Api\V1\Core\Response;
 
-class Database {
+class Database
+{
     private static $instance = null;
     private $connections = [];
+    private $isLocal;
 
-    private function __construct() {
+    private function __construct()
+    {
+        $this->detectEnvironment();
         $this->setupDefaultConnection();
     }
 
-    private function setupDefaultConnection() {
-        $config = [
-            'host' => '127.0.0.1',
+    private function detectEnvironment()
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $this->isLocal = (
+            $host === 'localhost' ||
+            $host === '127.0.0.1' ||
+            strpos($host, '192.168.') === 0 ||
+            strpos($host, '10.') === 0
+        );
+    }
+
+    private function setupDefaultConnection()
+    {
+        $config = $this->isLocal ? [
+            'host' => 'localhost',
             'user' => 'reporting',
             'pass' => 'reporting',
-            'db'   => 'u464193275_srishrinjewels'
+            'db' => 'u464193275_srishrinjewels'
+        ] : [
+            'host' => 'localhost',
+            'user' => 'u464193275_srishrinjuser',
+            'pass' => '9b@hMgk!=zI',
+            'db' => 'u464193275_srishrinjewels'
         ];
 
         try {
@@ -36,12 +57,14 @@ class Database {
         }
     }
 
-    private function setupWooConnection() {
+    private function setupWooConnection()
+    {
+        // WooCommerce is always remote
         $config = [
-            'host' => '193.203.184.203',
+            'host' => 'localhost',
             'user' => 'u464193275_FCSOL',
             'pass' => 'caMrYFsAmF',
-            'db'   => 'u464193275_ib3Xh'
+            'db' => 'u464193275_ib3Xh'
         ];
 
         try {
@@ -54,17 +77,22 @@ class Database {
             $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
             $this->connections['woo'] = $conn;
         } catch (PDOException $e) {
-            // We don't die here because remote might be down
             return null;
         }
     }
 
-    private function setupPosConnection() {
-        $config = [
-            'host' => '127.0.0.1',
+    private function setupPosConnection()
+    {
+        $config = $this->isLocal ? [
+            'host' => 'localhost',
             'user' => 'reporting',
             'pass' => 'reporting',
-            'db'   => 'u464193275_srishringarr'
+            'db' => 'u464193275_srishringarr'
+        ] : [
+            'host' => 'localhost',
+            'user' => 'u464193275_sarmicropos',
+            'pass' => 'Mypos1234',
+            'db' => 'u464193275_srishringarr'
         ];
 
         try {
@@ -81,14 +109,16 @@ class Database {
         }
     }
 
-    public static function getInstance() {
+    public static function getInstance()
+    {
         if (!self::$instance) {
             self::$instance = new Database();
         }
         return self::$instance;
     }
 
-    public function getConnection($type = 'default') {
+    public function getConnection($type = 'default')
+    {
         if ($type === 'woo' && !isset($this->connections['woo'])) {
             $this->setupWooConnection();
         }
@@ -96,5 +126,10 @@ class Database {
             $this->setupPosConnection();
         }
         return $this->connections[$type] ?? null;
+    }
+
+    public function isLocal()
+    {
+        return $this->isLocal;
     }
 }
