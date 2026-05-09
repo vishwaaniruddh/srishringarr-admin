@@ -1,0 +1,22 @@
+<?php
+require_once 'c:/xampp/htdocs/sri/admin/project/api/v1/core/Database.php';
+use Api\V1\Core\Database;
+
+try {
+    $db = Database::getInstance()->getConnection();
+    
+    echo "COLUMNS FOR 'product':\n";
+    $stmt = $db->query("DESCRIBE u464193275_srishrinjewels.product");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        echo "- " . $row['Field'] . " (" . $row['Type'] . ")\n";
+    }
+
+    echo "\nCOLUMNS FOR 'garment_product':\n";
+    $stmt = $db->query("DESCRIBE u464193275_srishrinjewels.garment_product");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        echo "- " . $row['Field'] . " (" . $row['Type'] . ")\n";
+    }
+
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
