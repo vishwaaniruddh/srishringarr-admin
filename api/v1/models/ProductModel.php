@@ -20,7 +20,6 @@ class ProductModel extends BaseModel {
         $query = "
             SELECT 
                 t.id, t.name, t.code, t.type, t.price, t.rent, t.deposit, t.image as legacy_image, t.featured,
-                pos.quantity as stock, pos.unit_price as mrp,
                 t.category
             FROM (
                 (SELECT 
@@ -46,13 +45,28 @@ class ProductModel extends BaseModel {
                 WHERE $g_where
                 ORDER BY g.gproduct_id DESC LIMIT 500)
             ) t
-            LEFT JOIN u464193275_srishringarr.phppos_items pos ON pos.name = t.code
             ORDER BY t.id DESC 
             LIMIT $limit OFFSET $offset";
 
         $stmt = $this->db->prepare($query);
         $stmt->execute(array_merge($params, $g_params));
         $products = $stmt->fetchAll();
+
+        // Fetch POS data (stock, mrp) separately
+        if (!empty($products)) {
+            $codes = array_map(function($p) { return $p['code']; }, $products);
+            $posDb = $this->getPosDb();
+            $placeholders = rtrim(str_repeat('?,', count($codes)), ',');
+            $stmt = $posDb->prepare("SELECT name as code, quantity as stock, unit_price as mrp FROM phppos_items WHERE name IN ($placeholders)");
+            $stmt->execute($codes);
+            $posData = [];
+            while ($row = $stmt->fetch()) $posData[$row['code']] = $row;
+
+            foreach ($products as &$p) {
+                $p['stock'] = $posData[$p['code']]['stock'] ?? 0;
+                $p['mrp'] = $posData[$p['code']]['mrp'] ?? 0;
+            }
+        }
 
         // Fetch real images from product_images_new
         if (!empty($products)) {
@@ -111,20 +125,30 @@ class ProductModel extends BaseModel {
     }
 
     public function getInventoryStats() {
+        // 1. Get all product codes from both tables
+        $codes = $this->db->query("
+            SELECT product_code as code FROM product
+            UNION ALL
+            SELECT gproduct_code as code FROM garment_product
+        ")->fetchAll(\PDO::FETCH_COLUMN);
+
+        if (empty($codes)) {
+            return ['in_stock' => 0, 'low_stock' => 0, 'out_of_stock' => 0];
+        }
+
+        // 2. Query POS DB for these codes
+        $posDb = $this->getPosDb();
+        $placeholders = rtrim(str_repeat('?,', count($codes)), ',');
         $query = "
             SELECT 
-                SUM(CASE WHEN pos.quantity > 5 THEN 1 ELSE 0 END) as in_stock,
-                SUM(CASE WHEN pos.quantity > 0 AND pos.quantity <= 5 THEN 1 ELSE 0 END) as low_stock,
-                SUM(CASE WHEN pos.quantity <= 0 OR pos.quantity IS NULL THEN 1 ELSE 0 END) as out_of_stock
-            FROM (
-                SELECT product_code as code FROM product
-                UNION ALL
-                SELECT gproduct_code as code FROM garment_product
-            ) p
-            LEFT JOIN u464193275_srishringarr.phppos_items pos ON pos.name = p.code";
+                SUM(CASE WHEN quantity > 5 THEN 1 ELSE 0 END) as in_stock,
+                SUM(CASE WHEN quantity > 0 AND quantity <= 5 THEN 1 ELSE 0 END) as low_stock,
+                SUM(CASE WHEN quantity <= 0 OR quantity IS NULL THEN 1 ELSE 0 END) as out_of_stock
+            FROM phppos_items 
+            WHERE name IN ($placeholders)";
         
-        $stmt = $this->db->prepare($query);
-        $stmt->execute();
+        $stmt = $posDb->prepare($query);
+        $stmt->execute($codes);
         return $stmt->fetch();
     }
 
@@ -139,11 +163,9 @@ class ProductModel extends BaseModel {
                         CAST(p.rent_price AS DECIMAL(10,2)) as rent,
                         CAST(p.deposit AS DECIMAL(10,2)) as deposit,
                         p.product_desc as description, p.featured,
-                        cat.categories_name as category,
-                        pos.unit_price as mrp, pos.quantity as stock
+                        cat.categories_name as category
                       FROM product p
                       LEFT JOIN jewel_subcat cat ON cat.subcat_id = p.subcat_id
-                      LEFT JOIN u464193275_srishringarr.phppos_items pos ON pos.name = p.product_code
                       WHERE p.product_id = ?";
         } else {
             $query = "SELECT 
@@ -152,11 +174,9 @@ class ProductModel extends BaseModel {
                         CAST(p.rent_price AS DECIMAL(10,2)) as rent,
                         CAST(p.deposit AS DECIMAL(10,2)) as deposit,
                         p.gproduct_desc as description, p.featured,
-                        cat.name as category,
-                        pos.unit_price as mrp, pos.quantity as stock
+                        cat.name as category
                       FROM garment_product p
                       LEFT JOIN garments cat ON cat.garment_id = p.garment_id
-                      LEFT JOIN u464193275_srishringarr.phppos_items pos ON pos.name = p.gproduct_code
                       WHERE p.gproduct_id = ?";
         }
         
@@ -165,6 +185,14 @@ class ProductModel extends BaseModel {
         $product = $stmt->fetch();
 
         if ($product) {
+            // Fetch POS data (stock, mrp) separately
+            $posDb = $this->getPosDb();
+            $stmt = $posDb->prepare("SELECT quantity as stock, unit_price as mrp FROM phppos_items WHERE name = ?");
+            $stmt->execute([$product['code']]);
+            $posData = $stmt->fetch();
+            $product['stock'] = $posData['stock'] ?? 0;
+            $product['mrp'] = $posData['mrp'] ?? 0;
+
             // Fetch Images from product_images_new
             $imgQuery = "SELECT img_name FROM product_images_new WHERE $idField = ? ORDER BY rank";
             $stmt = $this->db->prepare($imgQuery);

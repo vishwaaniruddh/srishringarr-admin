@@ -29,4 +29,8 @@ class BaseModel {
     public function getDb() {
         return $this->db;
     }
+
+    protected function getPosDb() {
+        return Database::getInstance()->getConnection('pos');
+    }
 }

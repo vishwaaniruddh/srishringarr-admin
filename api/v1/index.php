@@ -56,4 +56,8 @@ $router->add('GET', '/discounts/(\d+)', 'DiscountController@show');
 $router->add('PUT', '/discounts/(\d+)', 'DiscountController@update');
 $router->add('DELETE', '/discounts/(\d+)', 'DiscountController@delete');
 
+// Audit Routes
+$router->add('GET', '/audit/logs', 'AuditController@logs');
+$router->add('POST', '/audit/clear', 'AuditController@clear');
+
 $router->run();

@@ -27,7 +27,8 @@ $valid_pages = [
     'order_view',
     'categories',
     'yn_remote',
-    'coupon_add'
+    'coupon_add',
+    'audit'
 ];
 
 if (!in_array($page, $valid_pages)) {
@@ -50,7 +51,8 @@ $page_titles = [
     'order_view'   => 'Order Details',
     'categories'   => 'Collection Taxonomy',
     'yn_remote'    => 'YN Remote Management',
-    'coupon_add'   => 'Add New Coupon'
+    'coupon_add'   => 'Add New Coupon',
+    'audit'        => 'System Audit Logs'
 ];
 
 $current_title = $page_titles[$page] ?? 'Nexus Enterprise';

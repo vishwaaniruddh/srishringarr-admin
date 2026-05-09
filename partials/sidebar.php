@@ -21,6 +21,10 @@ $marketing_nav = [
     'coupons'    => ['label' => 'Coupons', 'icon' => 'confirmation_number'],
     'newsletter' => ['label' => 'Newsletter', 'icon' => 'campaign']
 ];
+
+$system_nav = [
+    'audit'  => ['label' => 'System Audit', 'icon' => 'terminal']
+];
 ?>
 <aside class="sidebar" id="sidebar">
     <!-- Brand -->
@@ -69,6 +73,13 @@ $marketing_nav = [
         <?php endforeach; ?>
 
         <div class="nav-section-label" style="margin-top: 16px;">System</div>
+        <?php foreach ($system_nav as $key => $item): ?>
+        <a class="nav-item <?php echo ($page === $key) ? 'active' : ''; ?>" 
+           href="?page=<?php echo $key; ?>" id="nav-<?php echo $key; ?>">
+            <span class="material-symbols-outlined"><?php echo $item['icon']; ?></span>
+            <span class="nav-item-text"><?php echo $item['label']; ?></span>
+        </a>
+        <?php endforeach; ?>
         <a class="nav-item" href="#" id="nav-settings">
             <span class="material-symbols-outlined">settings</span>
             <span class="nav-item-text">Settings</span>

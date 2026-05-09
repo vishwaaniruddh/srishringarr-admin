@@ -1,0 +1,2 @@
+[2026-05-09 04:24:29] [ERROR] [Logger.php:24] Failed to retrieve products: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'pos.quantity' in 'field list'
+[2026-05-09 04:25:10] [ERROR] [Logger.php:24] Failed to retrieve products: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'pos.quantity' in 'field list'

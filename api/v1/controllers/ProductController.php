@@ -4,10 +4,12 @@ namespace Api\V1\Controllers;
 
 use Api\V1\Core\Controller;
 use Api\V1\Core\Response;
+use Api\V1\Core\Logger;
 
 class ProductController extends Controller {
     public function index() {
-        $model = new \Api\V1\Models\ProductModel();
+        try {
+            $model = new \Api\V1\Models\ProductModel();
         
         $search = $_GET['search'] ?? '';
         $page = (int)($_GET['page'] ?? 1);
@@ -55,19 +57,28 @@ class ProductController extends Controller {
                 'pages' => ceil($total / $limit)
             ]
         ]);
+        } catch (\Exception $e) {
+            Logger::error("Failed to retrieve products: " . $e->getMessage());
+            Response::error("Internal Server Error", 500);
+        }
     }
 
     public function stats() {
-        $model = new \Api\V1\Models\ProductModel();
-        $stats = $model->getInventoryStats();
-        $total = $model->getTotalCount();
+        try {
+            $model = new \Api\V1\Models\ProductModel();
+            $stats = $model->getInventoryStats();
+            $total = $model->getTotalCount();
 
-        Response::success("Stats retrieved", [
-            'total' => $total,
-            'in_stock' => (int)($stats['in_stock'] ?? 0),
-            'low_stock' => (int)($stats['low_stock'] ?? 0),
-            'out_of_stock' => (int)($stats['out_of_stock'] ?? 0)
-        ]);
+            Response::success("Stats retrieved", [
+                'total' => $total,
+                'in_stock' => (int)($stats['in_stock'] ?? 0),
+                'low_stock' => (int)($stats['low_stock'] ?? 0),
+                'out_of_stock' => (int)($stats['out_of_stock'] ?? 0)
+            ]);
+        } catch (\Exception $e) {
+            Logger::error("Inventory stats failure: " . $e->getMessage());
+            Response::error("Failed to load inventory stats", 500);
+        }
     }
 
     public function show() {
