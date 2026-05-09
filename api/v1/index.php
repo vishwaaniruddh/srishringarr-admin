@@ -38,6 +38,9 @@ $router->add('GET', '/orders/show', 'OrderController@show');
 // Category Routes
 $router->add('GET', '/categories', 'CategoryController@index');
 
+// Legacy Replica Routes
+$router->add('GET', '/legacy/products', 'LegacyApiController@products');
+
 // WooProduct Routes
 $router->add('GET', '/wooproducts', 'WooProductController@index');
 

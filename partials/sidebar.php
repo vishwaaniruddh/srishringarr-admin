@@ -23,7 +23,15 @@ $marketing_nav = [
 ];
 
 $system_nav = [
-    'audit'  => ['label' => 'System Audit', 'icon' => 'terminal']
+    'audit'  => ['label' => 'System Audit', 'icon' => 'terminal'],
+    'settings' => [
+        'label' => 'Settings',
+        'icon' => 'settings',
+        'sub' => [
+            'settings_email' => 'Email',
+            'settings_site_info' => 'Site Info'
+        ]
+    ]
 ];
 ?>
 <aside class="sidebar" id="sidebar">
@@ -74,16 +82,29 @@ $system_nav = [
 
         <div class="nav-section-label" style="margin-top: 16px;">System</div>
         <?php foreach ($system_nav as $key => $item): ?>
-        <a class="nav-item <?php echo ($page === $key) ? 'active' : ''; ?>" 
-           href="?page=<?php echo $key; ?>" id="nav-<?php echo $key; ?>">
-            <span class="material-symbols-outlined"><?php echo $item['icon']; ?></span>
-            <span class="nav-item-text"><?php echo $item['label']; ?></span>
-        </a>
+            <?php if (isset($item['sub'])): ?>
+                <div class="nav-item-wrapper <?php echo ($page === $key || isset($item['sub'][$page])) ? 'active' : ''; ?>">
+                    <div class="nav-item has-sub" onclick="toggleSubmenu(this)">
+                        <span class="material-symbols-outlined"><?php echo $item['icon']; ?></span>
+                        <span class="nav-item-text"><?php echo $item['label']; ?></span>
+                        <span class="material-symbols-outlined sub-arrow">expand_more</span>
+                    </div>
+                    <div class="submenu">
+                        <?php foreach ($item['sub'] as $sub_key => $sub_label): ?>
+                            <a href="?page=<?php echo $sub_key; ?>" class="submenu-item <?php echo ($page === $sub_key) ? 'active' : ''; ?>">
+                                <?php echo $sub_label; ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php else: ?>
+                <a class="nav-item <?php echo ($page === $key) ? 'active' : ''; ?>" 
+                   href="?page=<?php echo $key; ?>" id="nav-<?php echo $key; ?>">
+                    <span class="material-symbols-outlined"><?php echo $item['icon']; ?></span>
+                    <span class="nav-item-text"><?php echo $item['label']; ?></span>
+                </a>
+            <?php endif; ?>
         <?php endforeach; ?>
-        <a class="nav-item" href="#" id="nav-settings">
-            <span class="material-symbols-outlined">settings</span>
-            <span class="nav-item-text">Settings</span>
-        </a>
         <a class="nav-item" href="#" id="nav-help">
             <span class="material-symbols-outlined">help_outline</span>
             <span class="nav-item-text">Help Center</span>

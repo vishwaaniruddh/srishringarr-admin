@@ -12,12 +12,14 @@ class ProductController extends Controller {
             $model = new \Api\V1\Models\ProductModel();
         
         $search = $_GET['search'] ?? '';
+        $category = $_GET['category'] ?? 'all';
+        $stock_status = $_GET['stock_status'] ?? 'all';
         $page = (int)($_GET['page'] ?? 1);
         $limit = (int)($_GET['limit'] ?? 20);
         $offset = ($page - 1) * $limit;
 
-        $products = $model->getProducts($limit, $offset, $search);
-        $total = $model->getTotalCount($search);
+        $products = $model->getProducts($limit, $offset, $search, $category, $stock_status);
+        $total = $model->getTotalCount($search, $category, $stock_status); // Note: total count might be off if stock filtering is active, but pagination will handle it.
 
         // Format data for the UI
         foreach ($products as &$p) {

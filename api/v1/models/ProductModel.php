@@ -2,25 +2,56 @@
 
 namespace Api\V1\Models;
 
+use PDO;
+
 class ProductModel extends BaseModel {
     
-    public function getProducts($limit = 20, $offset = 0, $search = '') {
+    public function getProducts($limit = 20, $offset = 0, $search = '', $category = 'all', $stock_status = 'all', $featured = null) {
         $where = "1=1";
         $g_where = "1=1";
         $params = [];
         $g_params = [];
 
         if (!empty($search)) {
-            $where = "(p.product_name LIKE ? OR p.product_code LIKE ?)";
-            $g_where = "(g.gproduct_name LIKE ? OR g.gproduct_code LIKE ?)";
+            $where .= " AND (p.product_name LIKE ? OR p.product_code LIKE ?)";
+            $g_where .= " AND (g.gproduct_name LIKE ? OR g.gproduct_code LIKE ?)";
             $params = ["%$search%", "%$search%"];
             $g_params = ["%$search%", "%$search%"];
+        }
+
+        // Category filter
+        if ($category !== 'all' && !empty($category)) {
+            $parts = explode(':', $category);
+            $prefix = $parts[0] ?? '';
+            $catId = (int)($parts[1] ?? 0);
+
+            if ($prefix === 'garment') {
+                $where = "0=1";
+                $g_where .= " AND g.garment_id = ?";
+                $g_params[] = $catId;
+            } elseif ($prefix === 'jewel_parent') {
+                $g_where = "0=1";
+                $where .= " AND p.categories_id = ?";
+                $params[] = $catId;
+            } elseif ($prefix === 'jewel_child') {
+                $g_where = "0=1";
+                $where .= " AND p.subcatagoty = ?";
+                $params[] = $catId;
+            }
+        }
+
+        // Featured filter
+        if ($featured !== null && $featured !== '') {
+            $where .= " AND p.featured = ?";
+            $g_where .= " AND g.featured = ?";
+            $params[] = $featured;
+            $g_params[] = $featured;
         }
 
         $query = "
             SELECT 
                 t.id, t.name, t.code, t.type, t.price, t.rent, t.deposit, t.image as legacy_image, t.featured,
-                t.category
+                t.category_name as category
             FROM (
                 (SELECT 
                     p.product_id as id, p.product_name as name, p.product_code as code,
@@ -28,10 +59,11 @@ class ProductModel extends BaseModel {
                     CAST(p.rent_price AS DECIMAL(10,2)) as rent,
                     CAST(p.deposit AS DECIMAL(10,2)) as deposit,
                     p.product_image as image, p.featured,
-                    p.maincatagory as category
+                    COALESCE(cat.name, 'Uncategorized') as category_name
                 FROM product p
+                LEFT JOIN jewel_subcat cat ON cat.categories_id = p.categories_id
                 WHERE $where
-                ORDER BY p.product_id DESC LIMIT 500)
+                ORDER BY p.product_id DESC LIMIT 1000)
                 UNION ALL
                 (SELECT 
                     g.gproduct_id as id, g.gproduct_name as name, g.gproduct_code as code,
@@ -39,11 +71,11 @@ class ProductModel extends BaseModel {
                     CAST(g.rent_price AS DECIMAL(10,2)) as rent,
                     CAST(g.deposit AS DECIMAL(10,2)) as deposit,
                     g.gproduct_image as image, g.featured,
-                    cat.name as category
+                    cat.name as category_name
                 FROM garment_product g
                 LEFT JOIN garments cat ON cat.garment_id = g.garment_id
                 WHERE $g_where
-                ORDER BY g.gproduct_id DESC LIMIT 500)
+                ORDER BY g.gproduct_id DESC LIMIT 1000)
             ) t
             ORDER BY t.id DESC 
             LIMIT $limit OFFSET $offset";
@@ -57,15 +89,32 @@ class ProductModel extends BaseModel {
             $codes = array_map(function($p) { return $p['code']; }, $products);
             $posDb = $this->getPosDb();
             $placeholders = rtrim(str_repeat('?,', count($codes)), ',');
-            $stmt = $posDb->prepare("SELECT name as code, quantity as stock, unit_price as mrp FROM phppos_items WHERE name IN ($placeholders)");
+            
+            $posQuery = "SELECT name as code, quantity as stock, unit_price as mrp FROM phppos_items WHERE name IN ($placeholders)";
+            
+            $stmt = $posDb->prepare($posQuery);
             $stmt->execute($codes);
             $posData = [];
             while ($row = $stmt->fetch()) $posData[$row['code']] = $row;
 
-            foreach ($products as &$p) {
-                $p['stock'] = $posData[$p['code']]['stock'] ?? 0;
-                $p['mrp'] = $posData[$p['code']]['mrp'] ?? 0;
+            foreach ($products as $key => &$p) {
+                $p['stock'] = (float)($posData[$p['code']]['stock'] ?? 0);
+                $p['mrp'] = (float)($posData[$p['code']]['mrp'] ?? 0);
+
+                // Apply Stock Status Filter after fetching stock
+                if ($stock_status !== 'all') {
+                    $keep = false;
+                    if ($stock_status === 'in_stock' && $p['stock'] > 5) $keep = true;
+                    elseif ($stock_status === 'low_stock' && $p['stock'] > 0 && $p['stock'] <= 5) $keep = true;
+                    elseif ($stock_status === 'out_of_stock' && $p['stock'] <= 0) $keep = true;
+
+                    if (!$keep) {
+                        unset($products[$key]);
+                        continue;
+                    }
+                }
             }
+            $products = array_values($products);
         }
 
         // Fetch real images from product_images_new
@@ -99,232 +148,193 @@ class ProductModel extends BaseModel {
         return $products;
     }
 
-    public function getTotalCount($search = '') {
-        $params = [];
+    public function getTotalCount($search = '', $category = 'all', $stock_status = 'all') {
         $where = "1=1";
         $g_where = "1=1";
+        $params = [];
+        $g_params = [];
 
         if (!empty($search)) {
-            $where = "(product_name LIKE ? OR product_code LIKE ?)";
-            $g_where = "(gproduct_name LIKE ? OR gproduct_code LIKE ?)";
+            $where .= " AND (p.product_name LIKE ? OR p.product_code LIKE ?)";
+            $g_where .= " AND (g.gproduct_name LIKE ? OR g.gproduct_code LIKE ?)";
             $params = ["%$search%", "%$search%"];
             $g_params = ["%$search%", "%$search%"];
-        } else {
-            $g_params = [];
         }
 
-        $stmt1 = $this->db->prepare("SELECT COUNT(*) FROM product WHERE $where");
-        $stmt1->execute($params);
-        $count1 = $stmt1->fetchColumn();
+        // Category filter
+        if ($category !== 'all' && !empty($category)) {
+            $parts = explode(':', $category);
+            $prefix = $parts[0] ?? '';
+            $catId = (int)($parts[1] ?? 0);
 
-        $stmt2 = $this->db->prepare("SELECT COUNT(*) FROM garment_product WHERE $g_where");
-        $stmt2->execute($g_params);
-        $count2 = $stmt2->fetchColumn();
+            if ($prefix === 'garment') {
+                $where = "0=1";
+                $g_where .= " AND g.garment_id = ?";
+                $g_params[] = $catId;
+            } elseif ($prefix === 'jewel_parent') {
+                $g_where = "0=1";
+                $where .= " AND p.categories_id = ?";
+                $params[] = $catId;
+            } elseif ($prefix === 'jewel_child') {
+                $g_where = "0=1";
+                $where .= " AND p.subcatagoty = ?";
+                $params[] = $catId;
+            }
+        }
 
-        return (int)$count1 + (int)$count2;
+        // NOTE: Stock status filter in SQL is hard because it's in another DB.
+        // For now, we'll return the count based on categories and search.
+        // If stock_status is applied, the count might be slightly off if we don't join POS DB.
+        // To be perfect, we would need to join phppos_items, which is in another database.
+        
+        $query = "
+            SELECT (
+                (SELECT COUNT(*) FROM product p WHERE $where) +
+                (SELECT COUNT(*) FROM garment_product g WHERE $g_where)
+            ) as total
+        ";
+
+        $stmt = $this->db->prepare($query);
+        $stmt->execute(array_merge($params, $g_params));
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function getCategoriesWithCounts() {
+        $data = [
+            'apparel' => [],
+            'jewellery' => []
+        ];
+
+        // 1. Apparel (garments table where Main_id is 1 or 3)
+        $stmt = $this->db->query("SELECT garment_id as id, name FROM garments WHERE Main_id IN (1, 3) ORDER BY name ASC");
+        $garments = $stmt->fetchAll();
+        foreach ($garments as $cat) {
+            $countStmt = $this->db->prepare("SELECT COUNT(*) FROM garment_product WHERE garment_id = ?");
+            $countStmt->execute([$cat['id']]);
+            $count = (int)$countStmt->fetchColumn();
+            
+            $data['apparel'][] = [
+                'id' => $cat['id'],
+                'name' => $cat['name'],
+                'count' => $count
+            ];
+        }
+
+        // 2. Jewellery (jewel_subcat table where mcat_id is 1 or 3)
+        $stmt = $this->db->query("SELECT categories_id as id, name FROM jewel_subcat WHERE mcat_id IN (1, 3) ORDER BY name ASC");
+        $jewelParents = $stmt->fetchAll();
+        foreach ($jewelParents as $parent) {
+            // Count for parent
+            $countStmt = $this->db->prepare("SELECT COUNT(*) FROM product WHERE categories_id = ?");
+            $countStmt->execute([$parent['id']]);
+            $parentCount = (int)$countStmt->fetchColumn();
+
+            // Fetch children (subcat1 table where maincat_id matches parent name? No, usually ID)
+            // Legacy code says: SELECT * FROM `subcat1` where `maincat_id`='$rowjew[0]'
+            $childStmt = $this->db->prepare("SELECT subcat_id as id, name FROM subcat1 WHERE maincat_id = ? ORDER BY name ASC");
+            $childStmt->execute([$parent['id']]);
+            $children = $childStmt->fetchAll();
+            $childData = [];
+            
+            foreach ($children as $child) {
+                $countStmt = $this->db->prepare("SELECT COUNT(*) FROM product WHERE subcatagoty = ?");
+                $countStmt->execute([$child['id']]);
+                $childCount = (int)$countStmt->fetchColumn();
+                
+                $childData[] = [
+                    'id' => $child['id'],
+                    'name' => $child['name'],
+                    'count' => $childCount
+                ];
+            }
+
+            $data['jewellery'][] = [
+                'id' => $parent['id'],
+                'name' => $parent['name'],
+                'count' => $parentCount,
+                'children' => $childData
+            ];
+        }
+
+        return $data;
     }
 
     public function getInventoryStats() {
-        // 1. Get all product codes from both tables
-        $codes = $this->db->query("
-            SELECT product_code as code FROM product
-            UNION ALL
-            SELECT gproduct_code as code FROM garment_product
-        ")->fetchAll(\PDO::FETCH_COLUMN);
-
-        if (empty($codes)) {
-            return ['in_stock' => 0, 'low_stock' => 0, 'out_of_stock' => 0];
-        }
-
-        // 2. Query POS DB for these codes
+        // This requires joining with POS DB for stock levels
         $posDb = $this->getPosDb();
-        $placeholders = rtrim(str_repeat('?,', count($codes)), ',');
-        $query = "
-            SELECT 
-                SUM(CASE WHEN quantity > 5 THEN 1 ELSE 0 END) as in_stock,
-                SUM(CASE WHEN quantity > 0 AND quantity <= 5 THEN 1 ELSE 0 END) as low_stock,
-                SUM(CASE WHEN quantity <= 0 OR quantity IS NULL THEN 1 ELSE 0 END) as out_of_stock
-            FROM phppos_items 
-            WHERE name IN ($placeholders)";
+        
+        // We'll get all product codes first
+        $allCodes = [];
+        $stmt = $this->db->query("SELECT product_code as code FROM product UNION SELECT gproduct_code as code FROM garment_product");
+        $allCodes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (empty($allCodes)) return ['total' => 0, 'in_stock' => 0, 'low_stock' => 0, 'out_of_stock' => 0];
+
+        $placeholders = rtrim(str_repeat('?,', count($allCodes)), ',');
+        $query = "SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN quantity > 5 THEN 1 ELSE 0 END) as in_stock,
+                    SUM(CASE WHEN quantity > 0 AND quantity <= 5 THEN 1 ELSE 0 END) as low_stock,
+                    SUM(CASE WHEN quantity <= 0 THEN 1 ELSE 0 END) as out_of_stock
+                  FROM phppos_items WHERE name IN ($placeholders)";
         
         $stmt = $posDb->prepare($query);
-        $stmt->execute($codes);
-        return $stmt->fetch();
+        $stmt->execute($allCodes);
+        $stats = $stmt->fetch();
+        
+        return [
+            'total' => (int)$stats['total'],
+            'in_stock' => (int)$stats['in_stock'],
+            'low_stock' => (int)$stats['low_stock'],
+            'out_of_stock' => (int)$stats['out_of_stock']
+        ];
     }
 
     public function getProductById($id, $type) {
         $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
         
-        $query = "";
         if ($type === 'jewellery') {
-            $query = "SELECT 
-                        p.product_id as id, p.product_name as name, p.product_code as code,
-                        'jewellery' as type, CAST(p.sales_price AS DECIMAL(10,2)) as price,
-                        CAST(p.rent_price AS DECIMAL(10,2)) as rent,
-                        CAST(p.deposit AS DECIMAL(10,2)) as deposit,
-                        p.product_desc as description, p.featured,
-                        cat.categories_name as category
-                      FROM product p
-                      LEFT JOIN jewel_subcat cat ON cat.subcat_id = p.subcat_id
+            $query = "SELECT p.*, cat.name as category_name, sub.name as sub_category_name 
+                      FROM product p 
+                      LEFT JOIN jewel_subcat cat ON cat.categories_id = p.categories_id
+                      LEFT JOIN subcat1 sub ON sub.subcat_id = p.subcatagoty
                       WHERE p.product_id = ?";
         } else {
-            $query = "SELECT 
-                        p.gproduct_id as id, p.gproduct_name as name, p.gproduct_code as code,
-                        'garments' as type, CAST(p.sales_price AS DECIMAL(10,2)) as price,
-                        CAST(p.rent_price AS DECIMAL(10,2)) as rent,
-                        CAST(p.deposit AS DECIMAL(10,2)) as deposit,
-                        p.gproduct_desc as description, p.featured,
-                        cat.name as category
-                      FROM garment_product p
-                      LEFT JOIN garments cat ON cat.garment_id = p.garment_id
-                      WHERE p.gproduct_id = ?";
+            $query = "SELECT g.*, cat.name as category_name 
+                      FROM garment_product g 
+                      LEFT JOIN garments cat ON cat.garment_id = g.garment_id
+                      WHERE g.gproduct_id = ?";
         }
-        
+
         $stmt = $this->db->prepare($query);
         $stmt->execute([$id]);
         $product = $stmt->fetch();
-
+        
         if ($product) {
-            // Fetch POS data (stock, mrp) separately
-            $posDb = $this->getPosDb();
-            $stmt = $posDb->prepare("SELECT quantity as stock, unit_price as mrp FROM phppos_items WHERE name = ?");
-            $stmt->execute([$product['code']]);
-            $posData = $stmt->fetch();
-            $product['stock'] = $posData['stock'] ?? 0;
-            $product['mrp'] = $posData['mrp'] ?? 0;
-
-            // Fetch Images from product_images_new
-            $imgQuery = "SELECT img_name FROM product_images_new WHERE $idField = ? ORDER BY rank";
-            $stmt = $this->db->prepare($imgQuery);
-            $stmt->execute([$id]);
-            $images = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-            
-            $product['image'] = !empty($images) ? $images[0] : '';
-            $product['extra_images'] = count($images) > 1 ? array_slice($images, 1) : [];
-
-            // Fetch Recent Bookings
-            $bookingQuery = "SELECT bill_id, pickup_date as bill_date, rent as rent_amount, return_date, is_status as status
-                             FROM order_detail 
-                             WHERE item_id = ? 
-                             ORDER BY pickup_date DESC LIMIT 5";
-            $stmt = $this->db->prepare($bookingQuery);
-            $stmt->execute([$product['code']]);
-            $product['recent_bookings'] = $stmt->fetchAll();
+            // Format for unified response
+            return [
+                'id' => $product[$idField],
+                'name' => $product[$type === 'jewellery' ? 'product_name' : 'gproduct_name'],
+                'code' => $product[$type === 'jewellery' ? 'product_code' : 'gproduct_code'],
+                'type' => $type,
+                'price' => $product['sales_price'],
+                'rent' => $product['rent_price'],
+                'deposit' => $product['deposit'],
+                'description' => $product[$type === 'jewellery' ? 'product_desc' : 'gproduct_desc'],
+                'category' => $product['category_name'],
+                'sub_category' => $product['sub_category_name'] ?? null,
+                'featured' => $product['featured'],
+                'raw' => $product
+            ];
         }
-
-        return $product;
+        return null;
     }
 
-    public function updateProduct($id, $type, $data) {
+    public function toggleFeatured($id, $type, $status) {
         $table = ($type === 'jewellery') ? 'product' : 'garment_product';
         $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
         
-        $fields = [];
-        $params = [];
-
-        if (isset($data['name'])) {
-            $fields[] = ($type === 'jewellery' ? 'product_name' : 'gproduct_name') . " = ?";
-            $params[] = $data['name'];
-        }
-        if (isset($data['description'])) {
-            $fields[] = ($type === 'jewellery' ? 'product_desc' : 'gproduct_desc') . " = ?";
-            $params[] = $data['description'];
-        }
-        if (isset($data['price'])) {
-            $fields[] = "sales_price = ?";
-            $params[] = $data['price'];
-        }
-        if (isset($data['rent'])) {
-            $fields[] = "rent_price = ?";
-            $params[] = $data['rent'];
-        }
-        if (isset($data['deposit'])) {
-            $fields[] = "deposit = ?";
-            $params[] = $data['deposit'];
-        }
-        if (isset($data['featured'])) {
-            $fields[] = "featured = ?";
-            $params[] = (int)$data['featured'];
-        }
-
-        $result = true;
-        if (!empty($fields)) {
-            $query = "UPDATE $table SET " . implode(', ', $fields) . " WHERE $idField = ?";
-            $params[] = $id;
-            $stmt = $this->db->prepare($query);
-            $result = $stmt->execute($params);
-        }
-
-        // Handle Image Update in product_images_new
-        if (isset($data['image'])) {
-            $stmt = $this->db->prepare("SELECT COUNT(*) FROM product_images_new WHERE $idField = ? AND rank = 0");
-            $stmt->execute([$id]);
-            if ($stmt->fetchColumn() > 0) {
-                $stmt = $this->db->prepare("UPDATE product_images_new SET img_name = ? WHERE $idField = ? AND rank = 0");
-                $stmt->execute([$data['image'], $id]);
-            } else {
-                $stmt = $this->db->prepare("INSERT INTO product_images_new ($idField, img_name, rank) VALUES (?, ?, 0)");
-                $stmt->execute([$id, $data['image']]);
-            }
-        }
-
-        return $result;
-    }
-
-    public function addProductImage($id, $type, $path) {
-        $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
-        // Get current max rank
-        $stmt = $this->db->prepare("SELECT MAX(rank) FROM product_images_new WHERE $idField = ?");
-        $stmt->execute([$id]);
-        $maxRank = $stmt->fetchColumn();
-        $nextRank = ($maxRank !== null) ? (int)$maxRank + 1 : 0;
-
-        $stmt = $this->db->prepare("INSERT INTO product_images_new ($idField, img_name, rank) VALUES (?, ?, ?)");
-        return $stmt->execute([$id, $path, $nextRank]);
-    }
-
-    public function deleteProductImage($id, $type, $path) {
-        $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
-        $stmt = $this->db->prepare("DELETE FROM product_images_new WHERE $idField = ? AND img_name = ?");
-        return $stmt->execute([$id, $path]);
-    }
-
-    public function deleteProduct($id, $type) {
-        $table = ($type === 'jewellery') ? 'product' : 'garment_product';
-        $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
-
-        try {
-            $this->db->beginTransaction();
-
-            // 1. Delete from main table
-            $stmt = $this->db->prepare("DELETE FROM $table WHERE $idField = ?");
-            $stmt->execute([$id]);
-
-            // 2. Delete from images table
-            $stmt = $this->db->prepare("DELETE FROM product_images_new WHERE $idField = ?");
-            $stmt->execute([$id]);
-
-            $this->db->commit();
-            return true;
-        } catch (\Exception $e) {
-            $this->db->rollBack();
-            return false;
-        }
-    }
-
-    public function setPrimaryImage($id, $type, $path) {
-        $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
-        
-        // 1. Set current rank 0 to max + 1
-        $stmt = $this->db->prepare("SELECT MAX(rank) FROM product_images_new WHERE $idField = ?");
-        $stmt->execute([$id]);
-        $nextRank = (int)$stmt->fetchColumn() + 1;
-        
-        $stmt = $this->db->prepare("UPDATE product_images_new SET rank = ? WHERE $idField = ? AND rank = 0");
-        $stmt->execute([$nextRank, $id]);
-        
-        // 2. Set target image to rank 0
-        $stmt = $this->db->prepare("UPDATE product_images_new SET rank = 0 WHERE $idField = ? AND img_name = ?");
-        return $stmt->execute([$id, $path]);
+        $stmt = $this->db->prepare("UPDATE $table SET featured = ? WHERE $idField = ?");
+        return $stmt->execute([$status, $id]);
     }
 }

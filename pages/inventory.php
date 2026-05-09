@@ -1,24 +1,6 @@
 <div class="page-sections">
-    <!-- Top Bar: Search + Filters -->
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-        <div class="search-bar" style="max-width:360px;">
-            <span class="material-symbols-outlined">search</span>
-            <input type="text" placeholder="Search products, SKUs..." id="inventory-search" onkeyup="debounceSearch(event)"/>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <div class="pill-tabs" id="status-filters">
-                <button class="pill-tab active" data-filter="all">All</button>
-                <button class="pill-tab" data-filter="in_stock">In Stock</button>
-                <button class="pill-tab" data-filter="low_stock">Low Stock</button>
-                <button class="pill-tab" data-filter="out_of_stock">Out of Stock</button>
-            </div>
-            <button class="btn btn-secondary btn-sm"><span class="material-symbols-outlined" style="font-size:16px;">filter_list</span> Filters</button>
-            <button class="btn btn-secondary btn-sm"><span class="material-symbols-outlined" style="font-size:16px;">file_download</span> Export</button>
-        </div>
-    </div>
-
     <!-- Stats Row -->
-    <div class="grid-4" id="stats-container">
+    <div class="grid-4" id="stats-container" style="margin-bottom:24px;">
         <!-- Skeleton Stats -->
         <div class="stat-card gradient grad-indigo animate-pulse">
             <div class="stat-card-header"><div class="stat-card-icon primary"></div></div>
@@ -39,6 +21,58 @@
             <div class="stat-card-header"><div class="stat-card-icon secondary"></div></div>
             <p class="stat-label">Out of Stock</p>
             <h3 class="stat-value">...</h3>
+        </div>
+    </div>
+
+    <!-- Unified Search & Filter Bar -->
+    <div class="card animate-fade-in-up" style="margin-bottom:24px; padding:0; overflow:hidden; border:1px solid var(--outline-variant); background:white;">
+        <div style="display:flex; align-items:center; height:48px;">
+            <!-- Search -->
+            <div style="flex:1; display:flex; align-items:center; padding:0 16px; gap:12px;">
+                <span class="material-symbols-outlined" style="color:var(--outline); font-size:20px;">search</span>
+                <input type="text" id="inventory-search" placeholder="Search products, SKUs..." onkeyup="debounceSearch(event)" 
+                       style="border:none; outline:none; font-size:13px; width:100%; background:transparent;">
+            </div>
+
+            <!-- Separator -->
+            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
+
+            <!-- Stock Filter -->
+            <div style="display:flex; align-items:center; padding:0 16px; gap:8px;">
+                <select id="filter-stock" onchange="applyFilters()" style="border:none; outline:none; font-size:13px; background:transparent; cursor:pointer; color:var(--on-surface-variant);">
+                    <option value="all">All Stock Status</option>
+                    <option value="in_stock">In Stock</option>
+                    <option value="low_stock">Low Stock</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                </select>
+            </div>
+
+            <!-- Separator -->
+            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
+
+            <!-- Collections Filter -->
+            <div style="display:flex; align-items:center; padding:0 16px; gap:8px;">
+                <select id="filter-category" onchange="applyFilters()" style="border:none; outline:none; font-size:13px; background:transparent; cursor:pointer; color:var(--on-surface-variant); min-width:180px;">
+                    <option value="all">All Collections</option>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+
+            <!-- Separator -->
+            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
+
+            <!-- Actions -->
+            <div style="display:flex; align-items:center; padding:0 12px; gap:4px;">
+                <button class="btn-icon" onclick="init()" title="Refresh" style="width:40px; height:40px; color:var(--outline);">
+                    <span class="material-symbols-outlined" style="font-size:20px;">refresh</span>
+                </button>
+                <button class="btn-icon" onclick="exportInventory()" title="Export" style="width:40px; height:40px; color:var(--outline);">
+                    <span class="material-symbols-outlined">download</span>
+                </button>
+                <button class="btn btn-primary" onclick="window.location.href='?page=product_add'" style="height:36px; padding:0 16px; font-size:12px; margin-left:8px; border-radius:0;">
+                    <span class="material-symbols-outlined" style="font-size:18px;">add</span> Add Product
+                </button>
+            </div>
         </div>
     </div>
 
@@ -165,7 +199,48 @@
 <script>
 let currentPage = 1;
 let currentSearch = '';
+let currentStockStatus = 'all';
+let currentCategory = 'all';
 let searchDebounceTimer;
+
+async function fetchCategories() {
+    try {
+        const response = await fetch('api/v1/categories');
+        const result = await response.json();
+        if (result.status === 'success') {
+            const data = result.data;
+            const select = document.getElementById('filter-category');
+            let html = '<option value="all">All Collections</option>';
+
+            // Apparel Group
+            if (data.apparel && data.apparel.length > 0) {
+                html += '<optgroup label="Apparel">';
+                data.apparel.forEach(cat => {
+                    html += `<option value="garment:${cat.id}">${cat.name} (${cat.count})</option>`;
+                });
+                html += '</optgroup>';
+            }
+
+            // Jewellery Group
+            if (data.jewellery && data.jewellery.length > 0) {
+                html += '<optgroup label="Jewellery">';
+                data.jewellery.forEach(parent => {
+                    html += `<option value="jewel_parent:${parent.id}">${parent.name} (${parent.count})</option>`;
+                    if (parent.children && parent.children.length > 0) {
+                        parent.children.forEach(child => {
+                            html += `<option value="jewel_child:${child.id}">— ${child.name} (${child.count})</option>`;
+                        });
+                    }
+                });
+                html += '</optgroup>';
+            }
+
+            select.innerHTML = html;
+        }
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+    }
+}
 
 async function fetchStats() {
     try {
@@ -210,7 +285,14 @@ async function fetchStats() {
     }
 }
 
-async function fetchInventory(page = 1, search = '') {
+function applyFilters() {
+    currentStockStatus = document.getElementById('filter-stock').value;
+    currentCategory = document.getElementById('filter-category').value;
+    currentPage = 1;
+    fetchInventory(currentPage, currentSearch, currentCategory, currentStockStatus);
+}
+
+async function fetchInventory(page = 1, search = '', category = 'all', stock_status = 'all') {
     const tableBody = document.getElementById('inventory-table-body');
     const paginationInfo = document.getElementById('pagination-info');
     const emptyState = document.getElementById('empty-state');
@@ -235,7 +317,15 @@ async function fetchInventory(page = 1, search = '') {
     `).join('');
 
     try {
-        const response = await fetch(`api/v1/products?page=${page}&search=${encodeURIComponent(search)}&limit=20`);
+        const query = new URLSearchParams({
+            page: page,
+            search: search,
+            category: category,
+            stock_status: stock_status,
+            limit: 20
+        }).toString();
+        
+        const response = await fetch(`api/v1/products?${query}`);
         const result = await response.json();
         
         if (result.status === 'success') {
@@ -366,7 +456,7 @@ function renderPagination(current, total) {
 
 function goToPage(page) {
     currentPage = page;
-    fetchInventory(currentPage, currentSearch);
+    fetchInventory(currentPage, currentSearch, currentCategory, currentStockStatus);
 }
 
 function debounceSearch(event) {
@@ -374,14 +464,20 @@ function debounceSearch(event) {
     searchDebounceTimer = setTimeout(() => {
         currentSearch = event.target.value;
         currentPage = 1;
-        fetchInventory(currentPage, currentSearch);
+        fetchInventory(currentPage, currentSearch, currentCategory, currentStockStatus);
     }, 500);
+}
+
+function exportInventory() {
+    showToast('Preparing inventory export...');
+    // Implementation for CSV/Excel export would go here
 }
 
 // Initial Load
 function init() {
     fetchStats();
-    fetchInventory();
+    fetchCategories();
+    fetchInventory(currentPage, currentSearch, currentCategory, currentStockStatus);
 }
 
 function toggleDropdown(event, button) {

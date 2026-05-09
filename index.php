@@ -28,7 +28,9 @@ $valid_pages = [
     'categories',
     'yn_remote',
     'coupon_add',
-    'audit'
+    'audit',
+    'settings_email',
+    'settings_site_info'
 ];
 
 if (!in_array($page, $valid_pages)) {
@@ -52,7 +54,9 @@ $page_titles = [
     'categories'   => 'Collection Taxonomy',
     'yn_remote'    => 'YN Remote Management',
     'coupon_add'   => 'Add New Coupon',
-    'audit'        => 'System Audit Logs'
+    'audit'        => 'System Audit Logs',
+    'settings_email' => 'Email Settings',
+    'settings_site_info' => 'Site Information'
 ];
 
 $current_title = $page_titles[$page] ?? 'Nexus Enterprise';

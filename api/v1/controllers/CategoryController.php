@@ -2,24 +2,18 @@
 
 namespace Api\V1\Controllers;
 
-use Api\V1\Models\CategoryModel;
+use Api\V1\Core\Controller;
+use Api\V1\Core\Response;
+use Api\V1\Models\ProductModel;
 
-class CategoryController {
-    private $categoryModel;
-
-    public function __construct() {
-        $this->categoryModel = new CategoryModel();
-    }
-
+class CategoryController extends Controller {
     public function index() {
-        $categories = $this->categoryModel->getNestedCategories();
-
-        echo json_encode([
-            'status' => 'success',
-            'data' => [
-                'garments' => $categories['apparel'],
-                'jewellery' => $categories['jewellery']
-            ]
-        ]);
+        try {
+            $model = new ProductModel();
+            $data = $model->getCategoriesWithCounts();
+            Response::success("Categories retrieved", $data);
+        } catch (\Exception $e) {
+            Response::error("Failed to fetch categories: " . $e->getMessage(), 500);
+        }
     }
 }
