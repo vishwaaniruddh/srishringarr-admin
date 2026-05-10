@@ -19,7 +19,8 @@ $page_nav = [
 $marketing_nav = [
     'discounts'  => ['label' => 'Discounts', 'icon' => 'sell'],
     'coupons'    => ['label' => 'Coupons', 'icon' => 'confirmation_number'],
-    'newsletter' => ['label' => 'Newsletter', 'icon' => 'campaign']
+    'newsletter' => ['label' => 'Newsletter', 'icon' => 'campaign'],
+    'seo_manager' => ['label' => 'SEO Intelligence', 'icon' => 'psychology']
 ];
 
 $system_nav = [

@@ -1,6 +1,29 @@
-<div class="page-sections">
+<div class="page-sections inventory-page">
+    <div class="inventory-hero animate-fade-in-up">
+        <div>
+            <div class="inventory-eyebrow">
+                <span class="material-symbols-outlined">inventory_2</span>
+                Catalog Operations
+            </div>
+            <h2>Inventory Management</h2>
+            <p>Monitor product availability, pricing, media health, and SEO readiness from one focused workspace.</p>
+        </div>
+        <div class="inventory-hero-actions">
+            <button class="inventory-tool-btn" onclick="init()" title="Refresh">
+                <span class="material-symbols-outlined">refresh</span>
+            </button>
+            <button class="inventory-tool-btn" onclick="exportInventory()" title="Export">
+                <span class="material-symbols-outlined">download</span>
+            </button>
+            <button class="inventory-primary-btn" onclick="window.location.href='?page=product_add'">
+                <span class="material-symbols-outlined">add</span>
+                Add Product
+            </button>
+        </div>
+    </div>
+
     <!-- Stats Row -->
-    <div class="grid-4" id="stats-container" style="margin-bottom:24px;">
+    <div class="inventory-stats-grid" id="stats-container" style="margin-bottom:24px;">
         <!-- Skeleton Stats -->
         <div class="stat-card gradient grad-indigo animate-pulse">
             <div class="stat-card-header"><div class="stat-card-icon primary"></div></div>
@@ -22,70 +45,63 @@
             <p class="stat-label">Out of Stock</p>
             <h3 class="stat-value">...</h3>
         </div>
+        <div class="stat-card gradient grad-teal animate-pulse">
+            <div class="stat-card-header"><div class="stat-card-icon success"></div></div>
+            <p class="stat-label">SEO Optimized</p>
+            <h3 class="stat-value">...</h3>
+        </div>
+        <div class="stat-card gradient grad-rose animate-pulse">
+            <div class="stat-card-header"><div class="stat-card-icon secondary"></div></div>
+            <p class="stat-label">Needs SEO</p>
+            <h3 class="stat-value">...</h3>
+        </div>
     </div>
 
     <!-- Unified Search & Filter Bar -->
-    <div class="card animate-fade-in-up" style="margin-bottom:24px; padding:0; overflow:hidden; border:1px solid var(--outline-variant); background:white;">
-        <div style="display:flex; align-items:center; height:48px;">
+    <div class="inventory-filter-panel animate-fade-in-up">
+        <div class="inventory-filter-row">
             <!-- Search -->
-            <div style="flex:1; display:flex; align-items:center; padding:0 16px; gap:12px;">
-                <span class="material-symbols-outlined" style="color:var(--outline); font-size:20px;">search</span>
+            <div class="inventory-search-field">
+                <span class="material-symbols-outlined">search</span>
                 <input type="text" id="inventory-search" placeholder="Search products, SKUs..." onkeyup="debounceSearch(event)" 
-                       style="border:none; outline:none; font-size:13px; width:100%; background:transparent;">
+                       aria-label="Search products and SKUs">
             </div>
 
-            <!-- Separator -->
-            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
-
             <!-- Stock Filter -->
-            <div style="display:flex; align-items:center; padding:0 16px; gap:8px;">
-                <select id="filter-stock" onchange="applyFilters()" style="border:none; outline:none; font-size:13px; background:transparent; cursor:pointer; color:var(--on-surface-variant);">
+            <label class="inventory-select-field">
+                <span class="material-symbols-outlined">fact_check</span>
+                <select id="filter-stock" onchange="applyFilters()" aria-label="Filter by stock status">
                     <option value="all">All Stock Status</option>
                     <option value="in_stock">In Stock</option>
                     <option value="low_stock">Low Stock</option>
                     <option value="out_of_stock">Out of Stock</option>
                 </select>
-            </div>
-
-            <!-- Separator -->
-            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
+            </label>
 
             <!-- Collections Filter -->
-            <div style="display:flex; align-items:center; padding:0 16px; gap:8px;">
-                <select id="filter-category" onchange="applyFilters()" style="border:none; outline:none; font-size:13px; background:transparent; cursor:pointer; color:var(--on-surface-variant); min-width:180px;">
+            <label class="inventory-select-field wide">
+                <span class="material-symbols-outlined">category</span>
+                <select id="filter-category" onchange="applyFilters()" aria-label="Filter by collection">
                     <option value="all">All Collections</option>
                     <!-- Will be populated dynamically -->
                 </select>
-            </div>
-
-            <!-- Separator -->
-            <div style="width:1px; height:24px; background:var(--outline-variant); opacity:0.5;"></div>
-
-            <!-- Actions -->
-            <div style="display:flex; align-items:center; padding:0 12px; gap:4px;">
-                <button class="btn-icon" onclick="init()" title="Refresh" style="width:40px; height:40px; color:var(--outline);">
-                    <span class="material-symbols-outlined" style="font-size:20px;">refresh</span>
-                </button>
-                <button class="btn-icon" onclick="exportInventory()" title="Export" style="width:40px; height:40px; color:var(--outline);">
-                    <span class="material-symbols-outlined">download</span>
-                </button>
-                <button class="btn btn-primary" onclick="window.location.href='?page=product_add'" style="height:36px; padding:0 16px; font-size:12px; margin-left:8px; border-radius:0;">
-                    <span class="material-symbols-outlined" style="font-size:18px;">add</span> Add Product
-                </button>
-            </div>
+            </label>
         </div>
     </div>
 
     <!-- Product Table -->
-    <div class="card animate-fade-in-up">
-        <div class="card-header">
-            <h4 class="card-title">Product Catalog</h4>
-            <div style="display:flex;gap:8px;">
-                <button class="btn-icon" aria-label="Grid view"><span class="material-symbols-outlined">grid_view</span></button>
-                <button class="btn-icon active" aria-label="List view"><span class="material-symbols-outlined">view_list</span></button>
+    <div class="inventory-table-card animate-fade-in-up">
+        <div class="inventory-table-header">
+            <div>
+                <h4>Product Catalog</h4>
+                <p>Review operational status and jump directly into product or SEO edits.</p>
+            </div>
+            <div class="inventory-view-toggle">
+                <button aria-label="Grid view"><span class="material-symbols-outlined">grid_view</span></button>
+                <button class="active" aria-label="List view"><span class="material-symbols-outlined">view_list</span></button>
             </div>
         </div>
-        <div style="overflow-x:auto;">
+        <div class="inventory-table-scroll">
             <table class="data-table">
                 <thead>
                     <tr>
@@ -95,6 +111,7 @@
                         <th>Category</th>
                         <th>Stock</th>
                         <th>Pricing (R/D/M)</th>
+                        <th>SEO</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -140,6 +157,292 @@
     width: 80%;
 }
 
+.inventory-page {
+    gap: 20px;
+}
+
+.inventory-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 22px 24px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #f7f2ff 100%);
+    border: 1px solid rgba(203,196,210,0.45);
+    box-shadow: 0 12px 34px rgba(30, 41, 59, 0.06);
+}
+
+.inventory-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+}
+
+.inventory-eyebrow .material-symbols-outlined {
+    font-size: 17px;
+}
+
+.inventory-hero h2 {
+    font-family: var(--font-headline);
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--on-surface);
+    margin: 0;
+    letter-spacing: 0;
+}
+
+.inventory-hero p {
+    margin: 6px 0 0;
+    max-width: 680px;
+    color: var(--on-surface-variant);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.inventory-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.inventory-tool-btn,
+.inventory-primary-btn {
+    height: 40px;
+    border: 1px solid var(--outline-variant);
+    background: #fff;
+    color: var(--on-surface);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.inventory-tool-btn {
+    width: 40px;
+}
+
+.inventory-primary-btn {
+    gap: 8px;
+    padding: 0 16px;
+    background: var(--primary);
+    color: var(--on-primary);
+    border-color: var(--primary);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.inventory-tool-btn:hover,
+.inventory-primary-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(30,41,59,0.12);
+}
+
+.inventory-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(150px, 1fr));
+    gap: var(--space-4);
+}
+
+.inventory-stats-grid .stat-card {
+    min-height: 112px;
+    border-radius: 0;
+}
+
+.inventory-filter-panel {
+    background: #fff;
+    border: 1px solid rgba(203,196,210,0.7);
+    box-shadow: 0 10px 26px rgba(30, 41, 59, 0.05);
+    padding: 12px;
+}
+
+.inventory-filter-row {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) 210px minmax(230px, 300px);
+    gap: 10px;
+    align-items: center;
+}
+
+.inventory-search-field,
+.inventory-select-field {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface-container-low);
+    border: 1px solid transparent;
+    padding: 0 12px;
+    transition: all 0.2s ease;
+}
+
+.inventory-search-field:focus-within,
+.inventory-select-field:focus-within {
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(103,80,164,0.08);
+}
+
+.inventory-search-field .material-symbols-outlined,
+.inventory-select-field .material-symbols-outlined {
+    color: var(--outline);
+    font-size: 19px;
+}
+
+.inventory-search-field input,
+.inventory-select-field select {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--on-surface);
+    font-size: 13px;
+}
+
+.inventory-select-field select {
+    cursor: pointer;
+}
+
+.inventory-table-card {
+    background: #fff;
+    border: 1px solid rgba(203,196,210,0.7);
+    box-shadow: 0 14px 34px rgba(30, 41, 59, 0.06);
+    overflow: hidden;
+}
+
+.inventory-table-header {
+    min-height: 64px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--outline-variant);
+    background: linear-gradient(180deg, #fff, #fafafa);
+}
+
+.inventory-table-header h4 {
+    font-family: var(--font-headline);
+    font-size: 17px;
+    font-weight: 900;
+    margin: 0;
+    color: var(--on-surface);
+}
+
+.inventory-table-header p {
+    margin: 3px 0 0;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+}
+
+.inventory-view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container-low);
+}
+
+.inventory-view-toggle button {
+    width: 36px;
+    height: 34px;
+    border: 0;
+    background: transparent;
+    color: var(--on-surface-variant);
+    cursor: pointer;
+}
+
+.inventory-view-toggle button.active {
+    background: var(--primary);
+    color: var(--on-primary);
+}
+
+.inventory-table-scroll {
+    overflow-x: auto;
+}
+
+.inventory-table-card .data-table thead th {
+    background: #fbfbfd;
+    color: #635b6d;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+.inventory-table-card .data-table tbody td {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+.inventory-table-card .table-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 0;
+    border: 1px solid var(--outline-variant);
+}
+
+.inventory-table-card .table-user-name {
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.product-image-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(135deg, rgba(103,80,164,0.08), rgba(118,91,0,0.08)),
+        var(--surface-container-high);
+    color: var(--outline);
+}
+
+.product-image-placeholder .material-symbols-outlined {
+    font-size: 18px;
+}
+
+@media (max-width: 1280px) {
+    .inventory-stats-grid {
+        grid-template-columns: repeat(3, minmax(180px, 1fr));
+    }
+
+    .inventory-filter-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .inventory-search-field {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 720px) {
+    .inventory-hero,
+    .inventory-table-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .inventory-hero-actions {
+        width: 100%;
+    }
+
+    .inventory-primary-btn {
+        flex: 1;
+    }
+
+    .inventory-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .inventory-filter-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Status Icon Badge */
 .status-icon-badge {
     width: 32px;
@@ -154,6 +457,43 @@
 .status-icon-badge.pending { background: var(--warning-container); color: var(--on-warning-container); }
 .status-icon-badge.inactive { background: var(--error-container); color: var(--on-error-container); }
 .status-icon-badge span { font-size: 20px; }
+
+.inventory-seo-score {
+    width: 58px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+.inventory-seo-score .material-symbols-outlined {
+    font-size: 15px;
+}
+
+.inventory-seo-score.seo-good {
+    background: var(--success-container);
+    color: var(--on-success-container);
+}
+
+.inventory-seo-score.seo-warn {
+    background: var(--warning-container);
+    color: var(--on-warning-container);
+}
+
+.inventory-seo-score.seo-poor {
+    background: var(--error-container);
+    color: var(--on-error-container);
+}
+
+.inventory-seo-score:hover {
+    border-color: currentColor;
+}
 
 /* Dropdown Menu */
 .dropdown { position: relative; }
@@ -278,6 +618,20 @@ async function fetchStats() {
                     <p class="stat-label">Out of Stock</p>
                     <h3 class="stat-value">${Number(stats.out_of_stock).toLocaleString()}</h3>
                 </div>
+                <div class="stat-card gradient grad-teal animate-fade-in-up">
+                    <div class="stat-card-header">
+                        <div class="stat-card-icon success"><span class="material-symbols-outlined">workspace_premium</span></div>
+                    </div>
+                    <p class="stat-label">SEO Optimized</p>
+                    <h3 class="stat-value">${Number(stats.seo_optimized || 0).toLocaleString()}</h3>
+                </div>
+                <div class="stat-card gradient grad-rose animate-fade-in-up">
+                    <div class="stat-card-header">
+                        <div class="stat-card-icon secondary"><span class="material-symbols-outlined">manage_search</span></div>
+                    </div>
+                    <p class="stat-label">Needs SEO</p>
+                    <h3 class="stat-value">${Number(stats.seo_needs_work || 0).toLocaleString()}</h3>
+                </div>
             `;
         }
     } catch (error) {
@@ -311,6 +665,7 @@ async function fetchInventory(page = 1, search = '', category = 'all', stock_sta
             <td><div class="skeleton-line" style="width:80px;"></div></td>
             <td><div class="skeleton-line" style="width:30px;"></div></td>
             <td><div class="skeleton-line" style="width:100px;"></div></td>
+            <td><div class="skeleton-line" style="width:54px;"></div></td>
             <td><div class="skeleton-line" style="width:80px;"></div></td>
             <td><div class="skeleton-line" style="width:40px;"></div></td>
         </tr>
@@ -348,8 +703,7 @@ async function fetchInventory(page = 1, search = '', category = 'all', stock_sta
                     <td>
                         <div class="table-user">
                             <div class="table-avatar" style="border-radius:var(--radius-lg); overflow:hidden; background:var(--surface-variant); position:relative;">
-                                <img src="${p.image}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;" 
-                                     onerror="this.onerror=null; this.src='https://srishringarr.com/static/images/default.jpg'">
+                                ${productImageHtml(p)}
                             </div>
                             <div style="display:flex;flex-direction:column;gap:2px;">
                                 <div style="display:flex;align-items:center;gap:6px;">
@@ -373,6 +727,12 @@ async function fetchInventory(page = 1, search = '', category = 'all', stock_sta
                             <span style="color:var(--outline);">D: ${p.formatted_deposit}</span>
                             <span style="color:var(--outline); text-decoration: line-through; font-size:10px;">MRP: ${p.formatted_mrp}</span>
                         </div>
+                    </td>
+                    <td>
+                        <a href="?page=product_edit&id=${p.id}&type=${p.type}" class="inventory-seo-score ${getSeoScoreClass(p.seo_score)}" title="Edit product SEO">
+                            <span class="material-symbols-outlined">query_stats</span>
+                            ${Number(p.seo_score || 0)}
+                        </a>
                     </td>
                     <td>
                         <div class="status-icon-badge ${p.status_class}" title="${p.status_label}">
@@ -407,8 +767,37 @@ async function fetchInventory(page = 1, search = '', category = 'all', stock_sta
         }
     } catch (error) {
         console.error('Error fetching inventory:', error);
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--error);">Failed to load inventory data.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--error);">Failed to load inventory data.</td></tr>';
     }
+}
+
+function getSeoScoreClass(score) {
+    score = Number(score || 0);
+    if (score >= 80) return 'seo-good';
+    if (score >= 50) return 'seo-warn';
+    return 'seo-poor';
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+}
+
+function productImageHtml(product) {
+    if (!product.image) {
+        return productImagePlaceholderHtml();
+    }
+
+    return `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="renderBrokenProductImage(this)">`;
+}
+
+function productImagePlaceholderHtml() {
+    return '<div class="product-image-placeholder" title="Image unavailable"><span class="material-symbols-outlined">image_not_supported</span></div>';
+}
+
+function renderBrokenProductImage(image) {
+    image.outerHTML = productImagePlaceholderHtml();
 }
 
 function confirmDelete(e, id, type, name) {

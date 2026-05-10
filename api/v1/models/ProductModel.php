@@ -59,9 +59,9 @@ class ProductModel extends BaseModel {
                     CAST(p.rent_price AS DECIMAL(10,2)) as rent,
                     CAST(p.deposit AS DECIMAL(10,2)) as deposit,
                     p.product_image as image, p.featured,
-                    COALESCE(cat.name, 'Uncategorized') as category_name
+                    COALESCE(cat.categories_name, 'Uncategorized') as category_name
                 FROM product p
-                LEFT JOIN jewel_subcat cat ON cat.categories_id = p.categories_id
+                LEFT JOIN jewel_subcat cat ON cat.subcat_id = p.categories_id
                 WHERE $where
                 ORDER BY p.product_id DESC LIMIT 1000)
                 UNION ALL
@@ -145,7 +145,78 @@ class ProductModel extends BaseModel {
             }
         }
 
+        $this->attachSeoData($products);
+
         return $products;
+    }
+
+    private function attachSeoData(&$products) {
+        if (empty($products)) {
+            return;
+        }
+
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS seo_meta (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                page_type ENUM('page', 'product', 'garment', 'category', 'jewel_category') NOT NULL,
+                entity_id INT DEFAULT NULL,
+                url_slug VARCHAR(255) DEFAULT NULL,
+                meta_title VARCHAR(255) DEFAULT NULL,
+                meta_description TEXT,
+                meta_keywords TEXT,
+                focus_keyword VARCHAR(255) DEFAULT NULL,
+                seo_score INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX seo_lookup_idx (page_type, entity_id),
+                INDEX seo_slug_idx (page_type, url_slug)
+            )
+        ");
+
+        $idsByType = [
+            'product' => [],
+            'garment' => []
+        ];
+
+        foreach ($products as $product) {
+            $seoType = $product['type'] === 'jewellery' ? 'product' : 'garment';
+            $idsByType[$seoType][] = (int)$product['id'];
+        }
+
+        $seoByKey = [];
+        foreach ($idsByType as $seoType => $ids) {
+            $ids = array_values(array_unique(array_filter($ids)));
+            if (empty($ids)) {
+                continue;
+            }
+
+            $placeholders = rtrim(str_repeat('?,', count($ids)), ',');
+            $params = array_merge([$seoType], $ids);
+            $stmt = $this->db->prepare("
+                SELECT page_type, entity_id, meta_title, meta_description, meta_keywords, focus_keyword, seo_score
+                FROM seo_meta
+                WHERE page_type = ? AND entity_id IN ($placeholders)
+                ORDER BY id DESC
+            ");
+            $stmt->execute($params);
+
+            while ($row = $stmt->fetch()) {
+                $key = $row['page_type'] . ':' . $row['entity_id'];
+                if (!isset($seoByKey[$key])) {
+                    $seoByKey[$key] = $row;
+                }
+            }
+        }
+
+        foreach ($products as &$product) {
+            $seoType = $product['type'] === 'jewellery' ? 'product' : 'garment';
+            $seo = $seoByKey[$seoType . ':' . $product['id']] ?? [];
+            $product['seo_score'] = (int)($seo['seo_score'] ?? 0);
+            $product['seo_focus_keyword'] = $seo['focus_keyword'] ?? '';
+            $product['seo_meta_title'] = $seo['meta_title'] ?? '';
+            $product['seo_meta_description'] = $seo['meta_description'] ?? '';
+            $product['seo_meta_keywords'] = $seo['meta_keywords'] ?? '';
+        }
     }
 
     public function getTotalCount($search = '', $category = 'all', $stock_status = 'all') {
@@ -221,7 +292,7 @@ class ProductModel extends BaseModel {
         }
 
         // 2. Jewellery (jewel_subcat table where mcat_id is 1 or 3)
-        $stmt = $this->db->query("SELECT categories_id as id, name FROM jewel_subcat WHERE mcat_id IN (1, 3) ORDER BY name ASC");
+        $stmt = $this->db->query("SELECT subcat_id as id, categories_name as name FROM jewel_subcat WHERE mcat_id IN (1, 3) ORDER BY categories_name ASC");
         $jewelParents = $stmt->fetchAll();
         foreach ($jewelParents as $parent) {
             // Count for parent
@@ -282,11 +353,59 @@ class ProductModel extends BaseModel {
         $stmt->execute($allCodes);
         $stats = $stmt->fetch();
         
+        $seoStats = $this->getProductSeoStats();
+
         return [
             'total' => (int)$stats['total'],
             'in_stock' => (int)$stats['in_stock'],
             'low_stock' => (int)$stats['low_stock'],
-            'out_of_stock' => (int)$stats['out_of_stock']
+            'out_of_stock' => (int)$stats['out_of_stock'],
+            'seo_optimized' => $seoStats['optimized'],
+            'seo_needs_work' => $seoStats['needs_work']
+        ];
+    }
+
+    private function getProductSeoStats() {
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS seo_meta (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                page_type ENUM('page', 'product', 'garment', 'category', 'jewel_category') NOT NULL,
+                entity_id INT DEFAULT NULL,
+                url_slug VARCHAR(255) DEFAULT NULL,
+                meta_title VARCHAR(255) DEFAULT NULL,
+                meta_description TEXT,
+                meta_keywords TEXT,
+                focus_keyword VARCHAR(255) DEFAULT NULL,
+                seo_score INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX seo_lookup_idx (page_type, entity_id),
+                INDEX seo_slug_idx (page_type, url_slug)
+            )
+        ");
+
+        $totalStmt = $this->db->query("
+            SELECT (
+                (SELECT COUNT(*) FROM product) +
+                (SELECT COUNT(*) FROM garment_product)
+            ) AS total
+        ");
+        $total = (int)$totalStmt->fetchColumn();
+
+        $stmt = $this->db->query("
+            SELECT COUNT(*) FROM (
+                SELECT page_type, entity_id, MAX(seo_score) AS best_score
+                FROM seo_meta
+                WHERE page_type IN ('product', 'garment') AND entity_id IS NOT NULL
+                GROUP BY page_type, entity_id
+                HAVING best_score >= 80
+            ) optimized
+        ");
+        $optimized = (int)$stmt->fetchColumn();
+
+        return [
+            'optimized' => $optimized,
+            'needs_work' => max(0, $total - $optimized)
         ];
     }
 
@@ -294,9 +413,9 @@ class ProductModel extends BaseModel {
         $idField = ($type === 'jewellery') ? 'product_id' : 'gproduct_id';
         
         if ($type === 'jewellery') {
-            $query = "SELECT p.*, cat.name as category_name, sub.name as sub_category_name 
+            $query = "SELECT p.*, cat.categories_name as category_name, sub.name as sub_category_name 
                       FROM product p 
-                      LEFT JOIN jewel_subcat cat ON cat.categories_id = p.categories_id
+                      LEFT JOIN jewel_subcat cat ON cat.subcat_id = p.categories_id
                       LEFT JOIN subcat1 sub ON sub.subcat_id = p.subcatagoty
                       WHERE p.product_id = ?";
         } else {
@@ -311,23 +430,120 @@ class ProductModel extends BaseModel {
         $product = $stmt->fetch();
         
         if ($product) {
+            $code = $product[$type === 'jewellery' ? 'product_code' : 'gproduct_code'];
+            $stock = 0;
+            $mrp = 0;
+            $posDb = $this->getPosDb();
+            if ($posDb && $code) {
+                $posStmt = $posDb->prepare("SELECT quantity as stock, unit_price as mrp FROM phppos_items WHERE name = ? LIMIT 1");
+                $posStmt->execute([$code]);
+                $pos = $posStmt->fetch();
+                if ($pos) {
+                    $stock = (float)($pos['stock'] ?? 0);
+                    $mrp = (float)($pos['mrp'] ?? 0);
+                }
+            }
+
+            $image = $product[$type === 'jewellery' ? 'product_image' : 'gproduct_image'] ?? '';
+            $imageStmtSql = $type === 'jewellery'
+                ? "SELECT img_name FROM product_images_new WHERE product_id = ? ORDER BY rank ASC, id ASC LIMIT 1"
+                : "SELECT img_name FROM product_images_new WHERE gproduct_id = ? ORDER BY rank ASC, id ASC LIMIT 1";
+            try {
+                $imageStmt = $this->db->prepare($imageStmtSql);
+                $imageStmt->execute([$id]);
+                $imageRow = $imageStmt->fetch();
+                if ($imageRow && !empty($imageRow['img_name'])) {
+                    $image = $imageRow['img_name'];
+                }
+            } catch (\Exception $e) {
+                // Keep legacy image when gallery metadata is unavailable.
+            }
+
+            $seoType = $type === 'jewellery' ? 'product' : 'garment';
+            $seoStmt = $this->db->prepare("
+                SELECT meta_title, meta_description, meta_keywords, focus_keyword, seo_score
+                FROM seo_meta
+                WHERE page_type = ? AND entity_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            ");
+            $seoStmt->execute([$seoType, $id]);
+            $seo = $seoStmt->fetch() ?: [];
+
             // Format for unified response
             return [
                 'id' => $product[$idField],
                 'name' => $product[$type === 'jewellery' ? 'product_name' : 'gproduct_name'],
-                'code' => $product[$type === 'jewellery' ? 'product_code' : 'gproduct_code'],
+                'code' => $code,
                 'type' => $type,
                 'price' => $product['sales_price'],
                 'rent' => $product['rent_price'],
                 'deposit' => $product['deposit'],
+                'stock' => $stock,
+                'mrp' => $mrp,
+                'image' => $image,
                 'description' => $product[$type === 'jewellery' ? 'product_desc' : 'gproduct_desc'],
                 'category' => $product['category_name'],
                 'sub_category' => $product['sub_category_name'] ?? null,
                 'featured' => $product['featured'],
+                'seo' => [
+                    'score' => (int)($seo['seo_score'] ?? 0),
+                    'focus_keyword' => $seo['focus_keyword'] ?? '',
+                    'meta_title' => $seo['meta_title'] ?? '',
+                    'meta_description' => $seo['meta_description'] ?? '',
+                    'meta_keywords' => $seo['meta_keywords'] ?? ''
+                ],
                 'raw' => $product
             ];
         }
         return null;
+    }
+
+    public function updateProduct($id, $type, $data) {
+        $isJewellery = $type === 'jewellery';
+        $table = $isJewellery ? 'product' : 'garment_product';
+        $idField = $isJewellery ? 'product_id' : 'gproduct_id';
+        $map = $isJewellery ? [
+            'name' => 'product_name',
+            'description' => 'product_desc',
+            'price' => 'sales_price',
+            'rent' => 'rent_price',
+            'deposit' => 'deposit',
+            'featured' => 'featured'
+        ] : [
+            'name' => 'gproduct_name',
+            'description' => 'gproduct_desc',
+            'price' => 'sales_price',
+            'rent' => 'rent_price',
+            'deposit' => 'deposit',
+            'featured' => 'featured'
+        ];
+
+        $updates = [];
+        $params = [];
+        foreach ($map as $input => $column) {
+            if (array_key_exists($input, $data)) {
+                $updates[] = "$column = ?";
+                $params[] = $data[$input];
+            }
+        }
+
+        if (empty($updates)) {
+            return true;
+        }
+
+        $params[] = $id;
+        $stmt = $this->db->prepare("UPDATE $table SET " . implode(', ', $updates) . " WHERE $idField = ?");
+        return $stmt->execute($params);
+    }
+
+    public function deleteProduct($id, $type) {
+        $isJewellery = $type === 'jewellery';
+        $table = $isJewellery ? 'product' : 'garment_product';
+        $idField = $isJewellery ? 'product_id' : 'gproduct_id';
+
+        $stmt = $this->db->prepare("DELETE FROM $table WHERE $idField = ?");
+        return $stmt->execute([$id]);
     }
 
     public function toggleFeatured($id, $type, $status) {

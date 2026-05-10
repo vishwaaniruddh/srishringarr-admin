@@ -82,9 +82,46 @@
                     </label>
                 </div>
             </div>
+
+            <!-- SEO Optimization Card -->
+            <div class="card animate-fade-in-up" style="animation-delay: 0.3s; border-left: 4px solid var(--primary);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h4 class="card-title" style="margin:0;">SEO Optimization</h4>
+                    <div id="seo-score-bubble" class="seo-score-badge score-poor" style="width:32px; height:32px; font-size:11px;">0</div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="form-group">
+                        <label style="display:block; font-size:10px; font-weight:700; color:var(--outline); margin-bottom:4px;">Focus Keyword</label>
+                        <input type="text" id="seo-keyword" class="search-bar" style="max-width:none; font-size:12px; padding:8px;" placeholder="e.g. bridal set">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:block; font-size:10px; font-weight:700; color:var(--outline); margin-bottom:4px;">SEO Title</label>
+                        <input type="text" id="seo-title" class="search-bar" style="max-width:none; font-size:12px; padding:8px;">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:block; font-size:10px; font-weight:700; color:var(--outline); margin-bottom:4px;">Meta Description</label>
+                        <textarea id="seo-desc" class="search-bar" style="max-width:none; font-size:12px; padding:8px; min-height:80px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label style="display:block; font-size:10px; font-weight:700; color:var(--outline); margin-bottom:4px;">Meta Keywords</label>
+                        <input type="text" id="seo-keywords" class="search-bar" style="max-width:none; font-size:12px; padding:8px;" placeholder="comma-separated search terms">
+                    </div>
+                </div>
+                
+                <div id="seo-feedback" style="margin-top:16px; border-top:1px solid var(--outline-variant); padding-top:12px;">
+                    <!-- Real-time tips -->
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="saveProductSeo(true)" style="width:100%; margin-top:14px; justify-content:center;">
+                    <span class="material-symbols-outlined">query_stats</span>
+                    Save SEO Only
+                </button>
+            </div>
         </div>
     </div>
 </div>
+
+<link rel="stylesheet" href="css/seo-manager.css">
 
 <style>
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
@@ -95,6 +132,7 @@ input:checked + .slider { background-color: var(--primary); }
 input:checked + .slider:before { transform: translateX(20px); }
 </style>
 
+<script src="js/SeoAnalyzer.js"></script>
 <script>
 const urlParams = new URLSearchParams(window.location.search);
 const productId = urlParams.get('id');
@@ -124,10 +162,54 @@ async function loadProduct() {
                 const imgPath = p.image.startsWith('http') ? p.image : `https://srishringarr.com/yn/uploads/${p.image}`;
                 document.getElementById('p-image-preview').innerHTML = `<img src="${imgPath}" style="width:100%; height:100%; object-fit:cover;">`;
             }
+
+            // Load SEO data
+            const seoRes = await fetch(`api/v1/seo?type=${productType === 'jewellery' ? 'product' : 'garment'}&id=${productId}`);
+            const seoData = await seoRes.json();
+            if (seoData.status === 'success') {
+                const s = seoData.data;
+                document.getElementById('seo-title').value = s.meta_title || '';
+                document.getElementById('seo-desc').value = s.meta_description || '';
+                document.getElementById('seo-keywords').value = s.meta_keywords || '';
+                document.getElementById('seo-keyword').value = s.focus_keyword || '';
+                
+                // Init analyzer
+                [document.getElementById('seo-title'), document.getElementById('seo-desc'), document.getElementById('seo-keywords'), document.getElementById('seo-keyword')].forEach(el => {
+                    el.addEventListener('input', runSeoAnalysis);
+                });
+                runSeoAnalysis();
+            }
         }
     } catch (error) {
         console.error('Error loading product:', error);
     }
+}
+
+function runSeoAnalysis() {
+    const data = {
+        title: document.getElementById('seo-title').value,
+        description: document.getElementById('seo-desc').value,
+        focusKeyword: document.getElementById('seo-keyword').value
+    };
+    const result = NexusSeo.analyze(data);
+    const bubble = document.getElementById('seo-score-bubble');
+    bubble.innerText = result.score;
+    
+    let status = 'bad';
+    if (result.score >= 90) status = 'best';
+    else if (result.score >= 80) status = 'good';
+    else if (result.score >= 50) status = 'average';
+
+    bubble.className = `seo-score-badge pill-${status}`;
+    
+    document.getElementById('seo-feedback').innerHTML = result.checks.map(c => `
+        <div class="checklist-item" style="padding:4px; border:none; background:transparent;">
+            <span class="material-symbols-outlined text-[14px] check-${c.status}">
+                ${c.status === 'pass' ? 'check_circle' : (c.status === 'warning' ? 'error' : 'cancel')}
+            </span>
+            <span style="font-size:11px;">${c.message}</span>
+        </div>
+    `).join('');
 }
 
 async function saveProduct() {
@@ -149,7 +231,8 @@ async function saveProduct() {
         const result = await response.json();
         
         if (result.status === 'success') {
-            showToast('Product updated successfully');
+            await saveProductSeo(false);
+            showToast('Product and SEO updated successfully');
             setTimeout(() => window.location.href = '?page=inventory', 1000);
         } else {
             showToast(result.message, 'error');
@@ -158,6 +241,31 @@ async function saveProduct() {
         console.error('Error saving product:', error);
         showToast('Connection error', 'error');
     }
+}
+
+async function saveProductSeo(showMessage = true) {
+    const seoData = {
+        page_type: productType === 'jewellery' ? 'product' : 'garment',
+        entity_id: productId,
+        meta_title: document.getElementById('seo-title').value,
+        meta_description: document.getElementById('seo-desc').value,
+        meta_keywords: document.getElementById('seo-keywords').value,
+        focus_keyword: document.getElementById('seo-keyword').value,
+        seo_score: document.getElementById('seo-score-bubble').innerText
+    };
+
+    const response = await fetch('api/v1/seo/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(seoData)
+    });
+    const result = await response.json();
+
+    if (showMessage) {
+        showToast(result.status === 'success' ? 'Product SEO updated successfully' : (result.message || 'Failed to save SEO'), result.status === 'success' ? 'success' : 'error');
+    }
+
+    return result.status === 'success';
 }
 
 document.addEventListener('DOMContentLoaded', loadProduct);

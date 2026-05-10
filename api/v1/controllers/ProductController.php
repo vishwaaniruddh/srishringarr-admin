@@ -75,7 +75,9 @@ class ProductController extends Controller {
                 'total' => $total,
                 'in_stock' => (int)($stats['in_stock'] ?? 0),
                 'low_stock' => (int)($stats['low_stock'] ?? 0),
-                'out_of_stock' => (int)($stats['out_of_stock'] ?? 0)
+                'out_of_stock' => (int)($stats['out_of_stock'] ?? 0),
+                'seo_optimized' => (int)($stats['seo_optimized'] ?? 0),
+                'seo_needs_work' => (int)($stats['seo_needs_work'] ?? 0)
             ]);
         } catch (\Exception $e) {
             Logger::error("Inventory stats failure: " . $e->getMessage());

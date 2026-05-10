@@ -18,6 +18,7 @@ $router->add('GET', '/dashboard-stats', 'DashboardController@index');
 // Product Routes
 $router->add('GET', '/products', 'ProductController@index');
 $router->add('GET', '/products/show', 'ProductController@show');
+$router->add('GET', '/products/view', 'ProductController@show');
 $router->add('POST', '/products/update', 'ProductController@update');
 $router->add('POST', '/products/delete', 'ProductController@destroy');
 $router->add('GET', '/inventory-stats', 'ProductController@stats');
@@ -62,5 +63,11 @@ $router->add('DELETE', '/discounts/(\d+)', 'DiscountController@delete');
 // Audit Routes
 $router->add('GET', '/audit/logs', 'AuditController@logs');
 $router->add('POST', '/audit/clear', 'AuditController@clear');
+
+// SEO Routes
+$router->add('GET', '/seo', 'SeoController@get');
+$router->add('POST', '/seo/update', 'SeoController@update');
+$router->add('GET', '/seo/settings', 'SeoController@getSettings');
+$router->add('POST', '/seo/settings/update', 'SeoController@updateSettings');
 
 $router->run();

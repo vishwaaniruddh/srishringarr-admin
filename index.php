@@ -30,7 +30,8 @@ $valid_pages = [
     'coupon_add',
     'audit',
     'settings_email',
-    'settings_site_info'
+    'settings_site_info',
+    'seo_manager'
 ];
 
 if (!in_array($page, $valid_pages)) {
@@ -56,7 +57,8 @@ $page_titles = [
     'coupon_add'   => 'Add New Coupon',
     'audit'        => 'System Audit Logs',
     'settings_email' => 'Email Settings',
-    'settings_site_info' => 'Site Information'
+    'settings_site_info' => 'Site Information',
+    'seo_manager' => 'SEO Intelligence'
 ];
 
 $current_title = $page_titles[$page] ?? 'Nexus Enterprise';
